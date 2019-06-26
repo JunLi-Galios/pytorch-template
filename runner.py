@@ -1,9 +1,9 @@
 import os
-import copy
 import time
 from glob import glob
 
 import numpy as np
+from tqdm import tqdm
 
 import torch
 import torch.nn as nn
@@ -11,29 +11,30 @@ import torch.nn.functional as F
 
 
 class Runner():
-    def __init__(self, arg, net, optim, torch_device, criterion, logger, scheduler=None, resume_file=""):
-        self.arg = arg
-        self.save_dir = arg.save_dir
-
-        self.logger = logger
+    def __init__(self, model_name, net, optim, torch_device, criterion, logger, save_dir, scheduler=None, resume_file=""):
 
         self.torch_device = torch_device
 
-        self.net = net
+        self.model_name = model_name
+        self.net = net.to(torch_device)
 
         self.criterion = criterion
         self.optim = optim
         self.scheduler = scheduler
+        
+        self.logger = logger
+        self.save_dir = save_dir
 
         self.start_epoch = 0
         self.best_metric = -1
+        self.best_epoch = -1
 
         self.resume(resume_file)
 
     def save(self, epoch, filename="train"):
         """Save current epoch model
         Save Elements:
-            model_type : arg.model
+            model_type : model name
             start_epoch : current epoch
             network : network parameters
             optimizer: optimizer parameters
@@ -43,7 +44,7 @@ class Runner():
             filename : model save file name
         """
 
-        torch.save({"model_type": self.arg.model,
+        torch.save({"model_type": self.model_name,
                     "start_epoch": epoch + 1,
                     "network": self.net.module.state_dict(),
                     "optimizer": self.optim.state_dict(),
@@ -57,34 +58,33 @@ class Runner():
             # load last epoch model
             filenames = sorted(glob(self.save_dir + "/*.pth.tar"))
             if len(filenames) == 0:
-                print("Not Load")
+                print("Not resume")
                 return
             else:
                 filename = os.path.basename(filenames[-1])
 
         file_path = self.save_dir + "/" + filename
-        if os.path.exists(file_path) is True:
+        if os.path.exists(file_path):
             print("Load %s to %s File" % (self.save_dir, filename))
             ckpoint = torch.load(file_path)
-            if ckpoint["model_type"] != self.arg.model:
+            if ckpoint["model_type"] != self.model_name:
                 raise ValueError("Ckpoint Model Type is %s" %
                                  (ckpoint["model_type"]))
 
             self.net.module.load_state_dict(ckpoint['network'])
-            self.ema.load_state_dict(ckpoint['ema'])
             self.optim.load_state_dict(ckpoint['optimizer'])
             self.start_epoch = ckpoint['start_epoch']
             self.best_metric = ckpoint["best_metric"]
             print("Load Model Type : %s, epoch : %d acc : %f" %
                   (ckpoint["model_type"], self.start_epoch, self.best_metric))
         else:
-            print("Load Failed, not exists file")
+            print("Resume Failed, not exists file")
 
     def train(self, train_loader, val_loader=None):
         print("\nStart Train len :", len(train_loader.dataset))        
         self.net.train()
         for epoch in range(self.start_epoch, self.arg.epoch):
-            for i, (input_, target_) in enumerate(train_loader):
+            for i, (input_, target_) in enumerate(tqdm(train_loader)):
                 target_ = target_.to(self.torch_device, non_blocking=True)
 
                 if self.scheduler:
@@ -104,6 +104,7 @@ class Runner():
                 self.valid(epoch, val_loader)
 
     def _get_acc(self, loader):
+        self.net.eval()
         correct = 0
         with torch.no_grad():
             for input_, target_ in loader:
@@ -112,6 +113,7 @@ class Runner():
 
                 _, idx = out.max(dim=1)
                 correct += (target_ == idx).sum().item()
+        self.net.train()
         return correct / len(loader.dataset)
 
     def valid(self, epoch, val_loader):
@@ -125,7 +127,7 @@ class Runner():
 
     def test(self, train_loader, val_loader):
         print("\n Start Test")
-        self.load()
+        self.resume()
         train_acc = self._get_acc(train_loader)
         valid_acc = self._get_acc(val_loader)
         self.logger.log_write("test", fname="test", train_acc=train_acc, valid_acc=valid_acc)
