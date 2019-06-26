@@ -6,7 +6,6 @@ class Logger:
             os.mkdir(log_dir)
    
         self.log_file = log_dir + "/log.txt"
-        self.model_dir = log_dir + "/model"
         
         if not os.path.exists(self.model_dir):
             os.mkdir(self.model_dir)
