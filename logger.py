@@ -84,8 +84,3 @@ class Logger:
 
         plt.show()
         
-    def save_structure(model, savefile):
-        torch.save(model, os.path.join(self.model_dir, savefile))
-        
-    def save_weight(model, savefile):
-        torch.save(model.state_dict(), os.path.join(self.model_dir, savefile))
