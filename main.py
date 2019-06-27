@@ -1,35 +1,43 @@
-"""
-    PyTorch training code for Wide Residual Networks:
-    http://arxiv.org/abs/1605.07146
-    2019 Jun Li
-"""
+import os
+import json
+
+import torch
+import models
+import datasets
+import optimizers
+import lr_schedulers
+import criterions
+from runner import Runner
+from logger import Logger
 
 
 import argparse
-parser = argparse.ArgumentParser(description='Wide Residual Networks')
+parser = argparse.ArgumentParser(description='Pytorch deep learning template')
+parser.add_argument('--save_dir', type=str, required=True,
+                        help='Directory name to save the model')
+
+# Dataset options
+parser.add_argument('--dataset', default='CIFAR10', type=str)
+parser.add_argument('--dataroot', default='../datasets/', type=str)
 
 # Model options
-parser.add_argument('--model', default='resnet', type=str)
-parser.add_argument('--dataset', default='CIFAR10', type=str)
-parser.add_argument('--dataroot', default='/scratch/liju2/data/', type=str)
-parser.add_argument('--dtype', default='float', type=str)
-parser.add_argument('--n_workers', default=0, type=int)
+parser.add_argument('--model_name', default='ResNet', type=str)
+parser.add_argument('-mp', '--model_parameter', default='{"depth":18,"pretrained":false}', type=json.loads)
+parser.add_argument('--resume_file', default='', type=str)
+
 
 # Training options
-parser.add_argument('--batchSize', default=128, type=int)
+parser.add_argument('--batch_size', default=128, type=int)
+parser.add_argument('--optim_method', default='ADAM', type=str)
 parser.add_argument('--lr', default=0.1, type=float)
+parser.add_argument('--momentum', default=0.9, type=float)
+parser.add_argument('--weight_decay', default=0.0005, type=float)
+parser.add_argument('--lr_scheduler', default='Constant', type=str)
+parser.add_argument('-lsv','--lr_scheduler_values', default='{"step_size":100}', type=json.loads)
+parser.add_argument('--loss', default='CrossEntropy', type=str)
 parser.add_argument('--epochs', default=200, type=int, metavar='N',
                     help='number of total epochs to run')
-parser.add_argument('--weightDecay', default=0.0005, type=float)
-parser.add_argument('--bnDecay', default=0, type=float)
-parser.add_argument('--omega', default=0.1, type=float)
-parser.add_argument('--grad_clip', default=0.1, type=float)
-parser.add_argument('--epoch_step', default='[60,120,160]', type=str,
-                    help='json list with epochs to drop lr on')
-parser.add_argument('--lr_decay_ratio', default=0.2, type=float)
-parser.add_argument('--resume', default='', type=str)
-parser.add_argument('--optim_method', default='SGD', type=str)
-parser.add_argument('--randomcrop_pad', default=4, type=float)
+parser.add_argument('--num_workers', default=0, type=int)
 
 # Device options
 parser.add_argument('--cuda', action='store_true')
@@ -39,12 +47,47 @@ parser.add_argument('--ngpu', default=1, type=int,
                     help='number of GPUs to use for training')
 parser.add_argument('--gpu_id', default='0', type=str,
                     help='id(s) for CUDA_VISIBLE_DEVICES')
-                    
+parser.add_argument('--no_cuda', action='store_true', default=False,
+                    help='enables CUDA training')
                     
 def main():
-    pass
-    
+    args = parser.parse_args()
+
+    args.save_dir = "%s/outs/%s" % (os.getcwd(), args.save_dir)
+    if os.path.exists(args.save_dir) is False:
+        os.mkdir(args.save_dir)
 
     
-if __name__ == '__main__':
+    logger = Logger(args.save_dir)
+    logger.will_write(str(args) + "\n")
+
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_id
+    device = torch.device('cuda' if torch.cuda.is_available() and args.no_cuda is False else 'cpu')
+
+    train_dataset, test_dataset, num_classes = getattr(datasets, args.dataset)(args.dataroot)
+
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
+                                           batch_size=args.batch_size,
+                                           shuffle=True,
+                                           pin_memory=True,
+                                           num_workers=args.num_workers)
+
+    test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
+                                          batch_size=args.batch_size,
+                                          shuffle=False,
+                                          pin_memory=True,
+                                          num_workers=args.num_workers)
+    net = getattr(models, args.model_name)(num_classes=num_classes, **args.model_parameter).to(device)
+    
+    optimizer = getattr(optimizers, args.optim_method)(net.parameters(), args.lr, args.momentum, args.weight_decay)
+    scheduler = getattr(lr_schedulers, args.lr_scheduler)(optimizer, **args.lr_scheduler_values)
+
+    criterion = getattr(criterions, args.loss)().to(device)
+
+    model = Runner(args.model_name, net, optimizer, device, criterion, logger, args.save_dir, scheduler, args.resume_file)
+    
+
+ 
+
+if __name__ == "__main__":
     main()

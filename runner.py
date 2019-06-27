@@ -11,12 +11,12 @@ import torch.nn.functional as F
 
 
 class Runner():
-    def __init__(self, model_name, net, optim, torch_device, criterion, logger, save_dir, scheduler=None, resume_file=""):
+    def __init__(self, model_name, net, optim, torch_device, criterion, logger, save_dir, scheduler, resume_file):
 
         self.torch_device = torch_device
 
         self.model_name = model_name
-        self.net = net.to(torch_device)
+        self.net = net
 
         self.criterion = criterion
         self.optim = optim
@@ -91,12 +91,11 @@ class Runner():
                     self.scheduler.step()
 
                 out = self.net(input_)
-                loss = self.loss(out, target_)
+                loss = self.criterion(out, target_)
 
                 self.optim.zero_grad()
                 loss.backward()
                 self.optim.step()
-                self.update_ema()
 
                 if (i % 50) == 0:
                     self.logger.log_write("train", epoch=epoch, loss=loss.item())
@@ -108,7 +107,6 @@ class Runner():
         correct = 0
         with torch.no_grad():
             for input_, target_ in loader:
-                out = self.ema(input_)
                 out = F.softmax(out, dim=1)
 
                 _, idx = out.max(dim=1)
