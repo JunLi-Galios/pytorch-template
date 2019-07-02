@@ -1,23 +1,41 @@
 import os
+import json
+import matplotlib.pyplot as plt
+from cycler import cycler
+import numpy as np
+from collections import OrderedDict
+
+# x axis of plot
+LOG_KEYS = {
+    "train":"epoch",
+    "valid":"epoch",
+    "test": "fname"
+}
+
+# y axis of plot
+# save datas like loss, f1-score, PSNR, SSIM ..
+# can multiple datas
+LOG_VALUES = {
+    "train":["loss", ],
+    "valid":["acc","valid_acc"],
+    "test": ["train_acc", "valid_acc"]
+}
 
 class Logger:
     def __init__(self, log_dir):
         if not os.path.exists(log_dir):
             os.mkdir(log_dir)
    
-        self.log_file = log_dir + "/log.txt"
-        
-        if not os.path.exists(self.model_dir):
-            os.mkdir(self.model_dir)
+        self.log_file = os.path.join(log_dir, 'log.txt')
             
-        self.buffer = []        
+        self.buffers = []        
 
     def will_write(self, line):
         print(line)
         self.buffers.append(line)
 
     def flush(self):
-        with open(self.log_file, "a") as f:
+        with open(self.log_file, "a", encoding="utf-8") as f:
             f.write("\n".join(self.buffers))
             f.write("\n")
         self.buffers = []
@@ -45,7 +63,7 @@ class Logger:
 
     def log_parse(self, log_key):
         log_dict = OrderedDict()
-        with open(self.log_file, "r") as f:
+        with open(self.log_file, "r", encoding="utf-8") as f:
             for line in f.readlines():
                 if len(line) == 1 or not line.startswith("[%s]" % (log_key)):
                     continue
@@ -81,5 +99,4 @@ class Logger:
                 ax.set_ylim([min(y) - 1, y[0] + 1])
         ax.legend(fontsize=30)
 
-        plt.show()
-        
+        plt.show()       

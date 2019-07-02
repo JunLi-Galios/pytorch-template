@@ -32,7 +32,7 @@ parser.add_argument('--optim_method', default='ADAM', type=str)
 parser.add_argument('--lr', default=0.1, type=float)
 parser.add_argument('--momentum', default=0.9, type=float)
 parser.add_argument('--weight_decay', default=0.0005, type=float)
-parser.add_argument('--lr_scheduler', default='Constant', type=str)
+parser.add_argument('--lr_scheduler', default='Step', type=str)
 parser.add_argument('-lsv','--lr_scheduler_values', default='{"step_size":100}', type=json.loads)
 parser.add_argument('--loss', default='CrossEntropy', type=str)
 parser.add_argument('--epochs', default=200, type=int, metavar='N',
@@ -53,7 +53,7 @@ parser.add_argument('--no_cuda', action='store_true', default=False,
 def main():
     args = parser.parse_args()
 
-    args.save_dir = "%s/outs/%s" % (os.getcwd(), args.save_dir)
+    args.save_dir = "%s/%s" % (os.getcwd(), args.save_dir)
     if os.path.exists(args.save_dir) is False:
         os.mkdir(args.save_dir)
 
@@ -85,6 +85,9 @@ def main():
     criterion = getattr(criterions, args.loss)().to(device)
 
     model = Runner(args.model_name, net, optimizer, device, criterion, logger, args.save_dir, scheduler, args.resume_file)
+
+    model.train(train_loader, test_loader)
+    model.test(train_loader, test_loader)
     
 
  
