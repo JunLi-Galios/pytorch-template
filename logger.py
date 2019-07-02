@@ -16,7 +16,7 @@ LOG_KEYS = {
 # save datas like loss, f1-score, PSNR, SSIM ..
 # can multiple datas
 LOG_VALUES = {
-    "train":["loss", ],
+    "train":["loss", "acc"],
     "valid":["acc","valid_acc"],
     "test": ["train_acc", "valid_acc"]
 }
