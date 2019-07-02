@@ -11,7 +11,7 @@ import torch.nn.functional as F
 
 
 class Runner():
-    def __init__(self, model_name, net, optim, torch_device, criterion, logger, save_dir, scheduler, resume_file):
+    def __init__(self, model_name, net, optim, torch_device, criterion, epochs, logger, save_dir, save_interval, scheduler, resume_file):
 
         self.torch_device = torch_device
 
@@ -21,9 +21,11 @@ class Runner():
         self.criterion = criterion
         self.optim = optim
         self.scheduler = scheduler
+        self.epochs = epochs
         
         self.logger = logger
         self.save_dir = save_dir
+        self.save_interval = save_interval
 
         self.start_epoch = 0
         self.best_metric = -1
@@ -46,7 +48,7 @@ class Runner():
 
         torch.save({"model_type": self.model_name,
                     "start_epoch": epoch + 1,
-                    "network": self.net.module.state_dict(),
+                    "network": self.net.state_dict(),
                     "optimizer": self.optim.state_dict(),
                     "best_metric": self.best_metric
                     }, self.save_dir + "/%s.pth.tar" % (filename))
@@ -71,7 +73,7 @@ class Runner():
                 raise ValueError("Ckpoint Model Type is %s" %
                                  (ckpoint["model_type"]))
 
-            self.net.module.load_state_dict(ckpoint['network'])
+            self.net.load_state_dict(ckpoint['network'])
             self.optim.load_state_dict(ckpoint['optimizer'])
             self.start_epoch = ckpoint['start_epoch']
             self.best_metric = ckpoint["best_metric"]
@@ -83,9 +85,11 @@ class Runner():
     def train(self, train_loader, val_loader=None):
         print("\nStart Train len :", len(train_loader.dataset))        
         self.net.train()
-        for epoch in range(self.start_epoch, self.arg.epoch):
+
+        for epoch in range(self.start_epoch, self.epochs):
             for i, (input_, target_) in enumerate(tqdm(train_loader)):
-                target_ = target_.to(self.torch_device, non_blocking=True)
+                input_ = input_.to(self.torch_device)
+                target_ = target_.to(self.torch_device)
 
                 if self.scheduler:
                     self.scheduler.step()
@@ -99,6 +103,8 @@ class Runner():
 
                 if (i % 50) == 0:
                     self.logger.log_write("train", epoch=epoch, loss=loss.item())
+            acc = self._get_acc(train_loader)
+            self.logger.log_write("train", epoch=epoch, acc=acc)
             if val_loader is not None:
                 self.valid(epoch, val_loader)
 
@@ -107,6 +113,8 @@ class Runner():
         correct = 0
         with torch.no_grad():
             for input_, target_ in loader:
+                input_ = input_.to(self.torch_device)
+                out = self.net(input_)
                 out = F.softmax(out, dim=1)
 
                 _, idx = out.max(dim=1)
@@ -120,6 +128,7 @@ class Runner():
 
         if acc > self.best_metric:
             self.best_metric = acc
+        if acc > self.best_metric or (epoch + 1)%self.save_interval==0:
             self.save(epoch, "epoch[%05d]_acc[%.4f]" % (
                 epoch, acc))
 
