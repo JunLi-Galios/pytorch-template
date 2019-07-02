@@ -21,13 +21,14 @@ parser.add_argument('--dataset', default='CIFAR10', type=str)
 parser.add_argument('--dataroot', default='../datasets/', type=str)
 
 # Model options
-parser.add_argument('--model_name', default='ResNet', type=str)
+parser.add_argument('--model_name', default='vgg11_bn', type=str)
 parser.add_argument('-mp', '--model_parameter', default='{"depth":18,"pretrained":false}', type=json.loads)
 parser.add_argument('--resume_file', default='', type=str)
 
 
 # Training options
-parser.add_argument('--batch_size', default=128, type=int)
+parser.add_argument('--train_batch', default=128, type=int)
+parser.add_argument('--test_batch', default=1024, type=int)
 parser.add_argument('--optim_method', default='ADAM', type=str)
 parser.add_argument('--lr', default=0.1, type=float)
 parser.add_argument('--momentum', default=0.9, type=float)
@@ -35,8 +36,8 @@ parser.add_argument('--weight_decay', default=0.0005, type=float)
 parser.add_argument('--lr_scheduler', default='Step', type=str)
 parser.add_argument('-lsv','--lr_scheduler_values', default='{"step_size":100}', type=json.loads)
 parser.add_argument('--loss', default='CrossEntropy', type=str)
-parser.add_argument('--epochs', default=200, type=int, metavar='N',
-                    help='number of total epochs to run')
+parser.add_argument('--epochs', default=1, type=int)
+parser.add_argument('--save_interval', default=10, type=int)
 parser.add_argument('--num_workers', default=0, type=int)
 
 # Device options
@@ -67,13 +68,13 @@ def main():
     train_dataset, test_dataset, num_classes = getattr(datasets, args.dataset)(args.dataroot)
 
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                           batch_size=args.batch_size,
+                                           batch_size=args.train_batch,
                                            shuffle=True,
                                            pin_memory=True,
                                            num_workers=args.num_workers)
 
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
-                                          batch_size=args.batch_size,
+                                          batch_size=args.test_batch,
                                           shuffle=False,
                                           pin_memory=True,
                                           num_workers=args.num_workers)
@@ -84,7 +85,7 @@ def main():
 
     criterion = getattr(criterions, args.loss)().to(device)
 
-    model = Runner(args.model_name, net, optimizer, device, criterion, logger, args.save_dir, scheduler, args.resume_file)
+    model = Runner(args.model_name, net, optimizer, device, criterion, args.epochs, logger, args.save_dir, args.save_interval, scheduler, args.resume_file)
 
     model.train(train_loader, test_loader)
     model.test(train_loader, test_loader)
