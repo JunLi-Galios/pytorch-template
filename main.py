@@ -56,7 +56,7 @@ def main():
 
     args.save_dir = "%s/%s" % (os.getcwd(), args.save_dir)
     if os.path.exists(args.save_dir) is False:
-        os.mkdir(args.save_dir)
+        os.makedirs(args.save_dir)
 
     
     logger = Logger(args.save_dir)
